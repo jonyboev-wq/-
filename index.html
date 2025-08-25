@@ -1,12 +1,18 @@
 <!doctype html>
 <html lang="ru">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ТопоРедактор</title>
+    <meta charset="UTF-8">
+    <title>Связь точек</title>
+    <style>
+      body,html { margin:0; padding:0; height:100%; }
+      svg { width:100%; height:100%; display:block; background:#f8fafc; }
+      .point { fill:#0ea5e9; stroke:#0369a1; stroke-width:2; cursor:pointer; }
+      .point.selected { stroke:#f59e0b; }
+      .line { stroke:#334155; stroke-width:2; cursor:pointer; }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
+    <svg id="canvas"></svg>
+    <script src="script.js"></script>
   </body>
 </html>
