@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ТопоРедактор — статическая версия</title>
+    <meta name="description" content="Точки (x,y,z) → горизонтали. Экспорт SVG, A2 1:200. Без сборки, работает как один HTML-файл.">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      html,body,#app{height:100%} .btn{ padding:.5rem .75rem; border-radius:.5rem; color:white }
+      .card{ border-radius:1rem; background:white; box-shadow:0 1px 2px rgba(0,0,0,.06); border:1px solid #e5e7eb }
+    </style>
+  </head>
+  <body class="bg-slate-50 text-slate-800">
+    <div id="app" class="w-full min-h-screen flex">
+      <div class="w-[380px] shrink-0 border-r border-slate-200 bg-white p-4 space-y-5 sticky top-0 h-screen overflow-y-auto">
+        <h1 class="text-2xl font-bold">ТопоРедактор</h1>
+        <p class="text-sm text-slate-500">Вставь точки (x; y; z; id) → получишь горизонтали. Кнопка A2 — вектор под печать.</p>
+
+        <section class="space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="font-semibold">Данные точек</label>
+            <div class="flex gap-2">
+              <button id="btnExample" class="px-2 py-1 text-xs rounded bg-slate-100 hover:bg-slate-200">Пример</button>
+              <label class="px-2 py-1 text-xs rounded bg-slate-100 hover:bg-slate-200 cursor-pointer">
+                Импорт CSV
+                <input id="fileCsv" type="file" accept=".csv,.txt" class="hidden">
+              </label>
+              <button id="btnClear" class="px-2 py-1 text-xs rounded bg-rose-50 text-rose-700 hover:bg-rose-100">Очистить</button>
+            </div>
+          </div>
+          <textarea id="csv" class="w-full h-40 font-mono text-xs p-2 border rounded focus:outline-none focus:ring" placeholder="x;y;z;id"></textarea>
+          <div class="flex gap-2 flex-wrap">
+            <button id="btnDownloadCsv" class="px-2 py-1 text-xs rounded bg-slate-100 hover:bg-slate-200">Скачать CSV</button>
+            <button id="btnTemplate" class="px-2 py-1 text-xs rounded bg-slate-100 hover:bg-slate-200">Шаблон CSV</button>
+          </div>
+          <div class="flex gap-3">
+            <label class="flex items-center gap-2 text-sm"><input id="swapXY" type="checkbox" /> Поменять X/Y</label>
+            <label class="flex items-center gap-2 text-sm"><input id="invertY" type="checkbox" checked /> Ось Y вверх</label>
+          </div>
+        </section>
+
+        <section class="space-y-2">
+          <h2 class="font-semibold">Сетка и точки</h2>
+          <div class="grid grid-cols-2 gap-2 items-center text-sm">
+            <label>Шаг сетки (м)</label>
+            <input id="gridSpacing" type="number" class="border rounded p-1" value="25" />
+            <label>Показывать сетку</label>
+            <input id="showGrid" type="checkbox" checked />
+            <label>Показывать точки</label>
+            <input id="showPoints" type="checkbox" checked />
+            <label>Подписи точек</label>
+            <input id="showLabels" type="checkbox" checked />
+            <label>Снап к сетке</label>
+            <input id="snapToGrid" type="checkbox" />
+          </div>
+        </section>
+
+        <section class="space-y-2">
+          <h2 class="font-semibold">Интерполяция и растр</h2>
+          <div class="grid grid-cols-2 gap-2 items-center text-sm">
+            <label>Столбцов (cols)</label>
+            <input id="cols" type="range" min="40" max="240" value="120" />
+            <div class="text-right text-xs text-slate-500" id="colsVal">120</div>
+
+            <label>Строк (rows)</label>
+            <input id="rows" type="range" min="40" max="240" value="120" />
+            <div class="text-right text-xs text-slate-500" id="rowsVal">120</div>
+
+            <label>Степень IDW</label>
+            <input id="idwPower" type="number" step="0.1" class="border rounded p-1" value="2" />
+            <label>Сглаживание контуров</label>
+            <input id="smooth" type="checkbox" checked />
+          </div>
+          <p class="text-xs text-slate-500">IDW=2 обычно достаточно. Больше cols/rows → детальнее, но медленнее.</p>
+        </section>
+
+        <section class="space-y-2">
+          <h2 class="font-semibold">Горизонтали</h2>
+          <div class="grid grid-cols-2 gap-2 items-center text-sm">
+            <label>Шаг (м)</label>
+            <input id="contourStep" type="number" step="0.1" class="border rounded p-1" value="0.5" />
+            <label>Основная через</label>
+            <input id="majorEvery" type="number" class="border rounded p-1" value="5" />
+            <label>Цветовая заливка</label>
+            <input id="fillShading" type="checkbox" />
+          </div>
+          <div class="flex gap-2 flex-wrap">
+            <button id="btnSvgScreen" class="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">Скачать SVG (экран)</button>
+            <button id="btnSvgA2" class="px-3 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700">SVG A2 1:200</button>
+          </div>
+          <p class="text-xs text-slate-500">A2 — 594×420 мм (альбом). Если не помещается при 1:200, масштаб уменьшим и подпишем фактический.</p>
+        </section>
+
+        <section class="space-y-1 text-xs text-slate-500">
+          <p>Клик по полю добавляет точку (введите высоту). Shift+клик — удалить ближайшую точку.</p>
+          <p>Сохранение проекта: «Скачать CSV» → затем «Импорт CSV» для загрузки обратно.</p>
+        </section>
+      </div>
+
+      <div class="flex-1 p-4 overflow-auto">
+        <div class="card p-2">
+          <svg id="svg" class="w-full h-auto cursor-crosshair" viewBox="0 0 1100 720" width="1100" height="720"></svg>
+        </div>
+        <div id="stats" class="mt-3 text-xs text-slate-500 flex flex-wrap gap-4"></div>
+      </div>
+    </div>
+
+    <!-- d3-contour as ESM -->
+    <script type="module">
+      import * as d3c from 'https://unpkg.com/d3-contour@3?module';
+
+      const $ = (id)=>document.getElementById(id);
+      const state = {
+        points: [], swapXY:false, invertY:true,
+        gridSpacing:25, showGrid:true, showPoints:true, showLabels:true, snapToGrid:false,
+        cols:120, rows:120, idwPower:2, smooth:true,
+        contourStep:0.5, majorEvery:5, width:1100, height:720, fillShading:false,
+      };
+      const EXAMPLE_CSV = `x;y;z;id
+0;0;120;P1
+50;0;121;P2
+100;0;122;P3
+150;0;122.5;P4
+200;0;123;P5
+0;50;119;P6
+50;50;120.5;P7
+100;50;121;P8
+150;50;122;P9
+200;50;123;P10
+0;100;118;P11
+50;100;119.5;P12
+100;100;120.5;P13
+150;100;121.5;P14
+200;100;122.5;P15
+0;150;117.5;P16
+50;150;118.5;P17
+100;150;119.5;P18
+150;150;120.5;P19
+200;150;121.5;P20
+0;200;117;P21
+50;200;117.5;P22
+100;200;118.5;P23
+150;200;119.5;P24
+200;200;120;P25`;
+
+      function niceMin(val, step) { return Math.floor(val / step) * step; }
+      function niceMax(val, step) { return Math.ceil(val / step) * step; }
+      function linScale(a,b,A,B){ const d=b-a, r=B-A; return (v)=>A + (v-a)*r/(d||1); }
+      function formatNum(n){ if (Math.abs(n)>=1000 || Math.abs(n)<0.01) return n.toExponential(2); return Number.isInteger(n)? String(n) : n.toFixed(2); }
+      function parsePoints(text){
+        const lines = String(text).replace(/\r/g,'\n').split(/\n+/).map(s=>s.trim()).filter(Boolean);
+        if (!lines.length) return [];
+        let header = /x.*y.*z/i.test(lines[0]);
+        const pts=[];
+        for(let i=header?1:0;i<lines.length;i++){
+          const raw = lines[i].split(/[;,\t ]+/).map(s=>s.trim()).filter(Boolean);
+          if (raw.length<3) continue;
+          let [x,y,z,id] = raw;
+          const px=Number(x), py=Number(y), pz=Number(z);
+          if (Number.isFinite(px)&&Number.isFinite(py)&&Number.isFinite(pz)) pts.push({id:id??String(i-(header?0:-1)), x:px, y:py, z:pz});
+        }
+        return pts;
+      }
+      function pointsToCSV(points){
+        const header='x;y;z;id';
+        const rows=points.map(p=>`${p.x};${p.y};${p.z};${p.id??''}`);
+        return [header,...rows].join('\n');
+      }
+      function rasterizeIDW(points, {minX,maxX,minY,maxY}, cols, rows, power=2, eps=1e-6){
+        const values = new Float64Array(cols*rows);
+        const dx = (maxX-minX)/(cols-1), dy=(maxY-minY)/(rows-1);
+        for (let j=0;j<rows;j++){
+          const y=minY+j*dy;
+          for (let i=0;i<cols;i++){
+            const x=minX+i*dx;
+            let num=0, den=0, exact=null;
+            for (const p of points){
+              const ddx=x-p.x, ddy=y-p.y;
+              const d2=ddx*ddx+ddy*ddy;
+              if (d2<eps*eps){ exact=p.z; break; }
+              const w=1/Math.pow(d2+eps, power/2);
+              num+=w*p.z; den+=w;
+            }
+            values[j*cols+i]= exact!==null ? exact : (den>0? num/den : NaN);
+          }
+        }
+        return {values, cols, rows};
+      }
+
+      const svgEl = $('svg'), statsEl = $('stats'), csvEl = $('csv');
+      $('btnExample').onclick = ()=>{ csvEl.value = EXAMPLE_CSV; loadFromCsv(); };
+      $('fileCsv').onchange = (e)=>{ const f=e.target.files?.[0]; if(!f) return; const r=new FileReader(); r.onload=(ev)=>{ csvEl.value=String(ev.target?.result||''); loadFromCsv(); }; r.readAsText(f); };
+      $('btnClear').onclick = ()=>{ if(confirm('Удалить все точки?')){ state.points=[]; csvEl.value='x;y;z;id\n'; render(); } };
+      $('swapXY').onchange = (e)=>{ state.swapXY=e.target.checked; render(); };
+      $('invertY').onchange = (e)=>{ state.invertY=e.target.checked; render(); };
+      $('gridSpacing').oninput = (e)=>{ state.gridSpacing=Number(e.target.value); render(); };
+      $('showGrid').onchange = (e)=>{ state.showGrid=e.target.checked; render(); };
+      $('showPoints').onchange = (e)=>{ state.showPoints=e.target.checked; render(); };
+      $('showLabels').onchange = (e)=>{ state.showLabels=e.target.checked; render(); };
+      $('snapToGrid').onchange = (e)=>{ state.snapToGrid=e.target.checked; };
+      $('cols').oninput = (e)=>{ state.cols=Number(e.target.value); $('colsVal').textContent=state.cols; render(); };
+      $('rows').oninput = (e)=>{ state.rows=Number(e.target.value); $('rowsVal').textContent=state.rows; render(); };
+      $('idwPower').oninput = (e)=>{ state.idwPower=Number(e.target.value); render(); };
+      $('smooth').onchange = (e)=>{ state.smooth=e.target.checked; render(); };
+      $('contourStep').oninput = (e)=>{ state.contourStep=Number(e.target.value); render(); };
+      $('majorEvery').oninput = (e)=>{ state.majorEvery=Number(e.target.value); render(); };
+      $('fillShading').onchange = (e)=>{ state.fillShading=e.target.checked; render(); };
+      $('btnDownloadCsv').onclick = ()=>{
+        const blob = new Blob([pointsToCSV(state.points)], {type:'text/csv;charset=utf-8'});
+        const url = URL.createObjectURL(blob); const a=document.createElement('a');
+        a.href=url; a.download='points.csv'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      };
+      $('btnTemplate').onclick = ()=>{
+        const blob = new Blob(['x;y;z;id\n'], {type:'text/csv;charset=utf-8'});
+        const url = URL.createObjectURL(blob); const a=document.createElement('a');
+        a.href=url; a.download='template.csv'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      };
+
+      const width=state.width, height=state.height, pad=60;
+      svgEl.setAttribute('width', width); svgEl.setAttribute('height', height);
+      svgEl.innerHTML = '';
+      rect(svgEl, 0,0, width,height, '#fafafa');
+      const rectPlot = document.createElementNS('http://www.w3.org/2000/svg','rect');
+      rectPlot.setAttribute('x', pad); rectPlot.setAttribute('y', pad);
+      rectPlot.setAttribute('width', width-2*pad); rectPlot.setAttribute('height', height-2*pad);
+      rectPlot.setAttribute('fill', '#fff'); rectPlot.setAttribute('stroke', '#e5e7eb');
+      svgEl.appendChild(rectPlot);
+      const gridLayer = newLayer(), contourFillLayer=newLayer(), contourLineLayer=newLayer(), pointsLayer=newLayer(), labelsLayer=newLayer();
+      text(svgEl, width/2, height-10, 'X', {size:12,anchor:'middle',fill:'#475569'});
+      const tY = document.createElementNS('http://www.w3.org/2000/svg','text');
+      tY.setAttribute('x',14); tY.setAttribute('y',height/2); tY.setAttribute('text-anchor','middle'); tY.setAttribute('font-size','12'); tY.setAttribute('fill','#475569'); tY.setAttribute('transform',`rotate(-90 14 ${height/2})`); tY.textContent='Y'; svgEl.appendChild(tY);
+      function newLayer(){ const g=document.createElementNS('http://www.w3.org/2000/svg','g'); svgEl.appendChild(g); return g; }
+
+      svgEl.addEventListener('click', (e)=>{
+        const pt = svgEl.createSVGPoint(); pt.x=e.clientX; pt.y=e.clientY;
+        const inv = svgEl.getScreenCTM().inverse(); const sp = pt.matrixTransform(inv);
+        const domain = getDomain();
+        const x = domain.minX + ((sp.x - pad) / (width - 2*pad)) * (domain.maxX - domain.minX);
+        const yScreen = domain.minY + ((sp.y - pad) / (height - 2*pad)) * (domain.maxY - domain.minY);
+        const y = state.invertY ? (domain.maxY - (yScreen - domain.minY)) : yScreen;
+        if (e.shiftKey){
+          if (!state.points.length) return;
+          let bi=0, bd=Infinity;
+          const pts = asPts();
+          for (let i=0;i<pts.length;i++){
+            const dx=pts[i].x-x, dy=pts[i].y-y, d=dx*dx+dy*dy;
+            if (d<bd){bd=d; bi=i;}
+          }
+          state.points.splice(bi,1); csvEl.value = pointsToCSV(state.points); render(); return;
+        }
+        const zStr = prompt('Высота точки (z):','0'); if (zStr===null) return;
+        const z = Number(zStr); if (!Number.isFinite(z)) return alert('Нужно число.');
+        const id = `P${state.points.length+1}`;
+        let nx=x, ny=y;
+        if (state.snapToGrid){
+          const gs = Number(state.gridSpacing)||1; nx=Math.round(nx/gs)*gs; ny=Math.round(ny/gs)*gs;
+        }
+        const newPoint = state.swapXY ? {id, x: ny, y: nx, z} : {id, x: nx, y: ny, z};
+        state.points.push(newPoint); csvEl.value = pointsToCSV(state.points); render();
+      });
+
+      $('btnSvgScreen').onclick = ()=>{
+        const serializer=new XMLSerializer();
+        const source=serializer.serializeToString(svgEl);
+        const blob = new Blob([source], {type:'image/svg+xml;charset=utf-8'});
+        const url = URL.createObjectURL(blob); const a=document.createElement('a');
+        a.href=url; a.download='topoplan.svg'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      };
+      $('btnSvgA2').onclick = exportA2;
+
+      csvEl.value = EXAMPLE_CSV; loadFromCsv();
+      function loadFromCsv(){ state.points = parsePoints(csvEl.value); render(); }
+
+      function render(){
+        gridLayer.innerHTML=''; contourFillLayer.innerHTML=''; contourLineLayer.innerHTML=''; pointsLayer.innerHTML=''; labelsLayer.innerHTML='';
+        const pts = asPts();
+        const domain = getDomain();
+        const X = linScale(domain.minX, domain.maxX, pad, width-pad);
+        const Ybase = linScale(domain.minY, domain.maxY, height-pad, pad);
+        const Yinv = linScale(domain.minY, domain.maxY, pad, height-pad);
+        const toScreen = (x,y)=>({X:X(x), Y:(state.invertY?Ybase(y):Yinv(y))});
+
+        if (state.showGrid){
+          const gs = Number(state.gridSpacing)||25;
+          const x0 = niceMin(domain.minX, gs), x1 = niceMax(domain.maxX, gs);
+          const y0 = niceMin(domain.minY, gs), y1 = niceMax(domain.maxY, gs);
+          for (let x=x0;x<=x1+1e-9;x+=gs){
+            const sx = X(x); line(gridLayer, sx, pad, sx, height-pad, '#f1f5f9', 1);
+            text(gridLayer, X(x), height-pad+16, formatNum(x), {size:10, anchor:'middle', fill:'#475569'});
+          }
+          for (let y=y0;y<=y1+1e-9;y+=gs){
+            const sy = state.invertY?Ybase(y):Yinv(y);
+            line(gridLayer, pad, sy, width-pad, sy, '#f1f5f9', 1);
+            text(gridLayer, pad-6, sy+3, formatNum(y), {size:10, anchor:'end', fill:'#475569'});
+          }
+        }
+
+        if (!pts.length){ updateStats(pts, domain, []); return; }
+        const raster = rasterizeIDW(pts, domain, state.cols, state.rows, state.idwPower);
+        const zs = pts.map(p=>p.z); const minZ=Math.min(...zs), maxZ=Math.max(...zs);
+        const thresholds = buildThresholds(minZ, maxZ, state.contourStep);
+        function buildThresholds(minZ,maxZ,step){ if(!Number.isFinite(step)||step<=0) return []; const start=niceMin(minZ,step), end=niceMax(maxZ,step); const arr=[]; for(let v=start; v<=end; v+=step) arr.push(Number(v.toFixed(6))); return arr; }
+        const gen = d3c.contours().size([raster.cols, raster.rows]).smooth(state.smooth).thresholds(thresholds);
+        const conts = gen(raster.values);
+
+        if (state.fillShading){
+          const color = (v)=>{
+            const t = (v - thresholds[0]) / Math.max(1e-9, thresholds[thresholds.length-1]-thresholds[0]);
+            const r=Math.round(255*Math.min(1,Math.max(0, t*1.2)));
+            const g=Math.round(200*Math.min(1,Math.max(0, t)));
+            const b=Math.round(200*(1-t));
+            return `rgba(${r},${g},${b},0.28)`;
+          };
+          for (const c of conts){
+            for (const poly of c.coordinates){
+              const d = poly.map(ringToPath).join(' ');
+              path(contourFillLayer, d, {fill: color(c.value), stroke:'none'});
+            }
+          }
+        }
+
+        conts.forEach((cont)=>{
+          const isMajor = (val)=>{
+            const i = thresholds.findIndex(t=>Math.abs(t - val) < 1e-9);
+            return i>=0 && (i % state.majorEvery === 0 || Math.abs(val - Math.round(val)) < 1e-6);
+          };
+          const stroke = isMajor(cont.value) ? '#334155' : '#64748b';
+          const sw = isMajor(cont.value) ? 1.6 : 0.9;
+          cont.coordinates.forEach((poly)=>{
+            const d = poly.map(ringToPath).join(' ');
+            path(contourLineLayer, d, {fill:'none', stroke, strokeWidth:sw});
+          });
+          const ring = cont.coordinates[0]?.[0];
+          if (ring && ring.length>2){
+            const mid = ring[Math.floor(ring.length/2)];
+            const {x,y} = gridToDomain(mid[0], mid[1], raster, domain);
+            const {X:sx, Y:sy} = toScreen(x,y);
+            rect(labelsLayer, sx-12, sy-8, 24, 14, '#ffffffcc');
+            text(labelsLayer, sx, sy+2, formatNum(cont.value), {size:10, anchor:'middle', fill:'#0f172a'});
+          }
+        });
+
+        if (state.showPoints){
+          pts.forEach((p,i)=>{
+            const {X:sx, Y:sy} = toScreen(p.x,p.y);
+            circle(pointsLayer, sx, sy, 3.5, '#0ea5e9', '#0369a1');
+            if (state.showLabels){
+              const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+              t.setAttribute('x', sx+6); t.setAttribute('y', sy-6); t.setAttribute('font-size','11'); t.setAttribute('fill','#0f172a');
+              t.innerHTML = `${escapeHtml(p.id??('P'+(i+1)))} <tspan fill="#475569">(${formatNum(p.x)}, ${formatNum(p.y)})</tspan> <tspan font-weight="600">${formatNum(p.z)}</tspan>`;
+              labelsLayer.appendChild(t);
+            }
+          });
+        }
+
+        updateStats(pts, domain, thresholds);
+
+        function gridToDomain(gx, gy, raster, domain){
+          const x = domain.minX + (gx / (raster.cols - 1)) * (domain.maxX - domain.minX);
+          const y = domain.minY + (gy / (raster.rows - 1)) * (domain.maxY - domain.minY);
+          return {x,y};
+        }
+        function ringToPath(ring){
+          let d='';
+          for(let i=0;i<ring.length;i++){
+            const {x,y} = gridToDomain(ring[i][0], ring[i][1], raster, domain);
+            const X = linScale(domain.minX, domain.maxX, pad, width-pad)(x);
+            const Y = (state.invertY
+              ? linScale(domain.minY, domain.maxY, height-pad, pad)(y)
+              : linScale(domain.minY, domain.maxY, pad, height-pad)(y));
+            d += (i===0?`M ${X} ${Y}`:` L ${X} ${Y}`);
+          }
+          return d + ' Z';
+        }
+      }
+
+      function updateStats(pts, domain, thresholds){
+        statsEl.innerHTML = '';
+        addStat(`Точек: <b>${pts.length}</b>`);
+        addStat(`Диапазон X: <b>${formatNum(domain.minX)}</b> … <b>${formatNum(domain.maxX)}</b>`);
+        addStat(`Диапазон Y: <b>${formatNum(domain.minY)}</b> … <b>${formatNum(domain.maxY)}</b>`);
+        if (pts.length){
+          const zs = pts.map(p=>p.z); const minZ=Math.min(...zs), maxZ=Math.max(...zs);
+          addStat(`Высоты: <b>${formatNum(minZ)}</b> … <b>${formatNum(maxZ)}</b>`);
+        }
+        addStat(`Горизонталей: <b>${thresholds?.length??0}</b>`);
+        function addStat(html){ const span=document.createElement('span'); span.innerHTML=html; statsEl.appendChild(span); }
+      }
+
+      function line(g,x1,y1,x2,y2,stroke,sw){ const e = document.createElementNS('http://www.w3.org/2000/svg','line'); e.setAttribute('x1',x1); e.setAttribute('y1',y1); e.setAttribute('x2',x2); e.setAttribute('y2',y2); e.setAttribute('stroke',stroke); e.setAttribute('stroke-width',sw); g.appendChild(e); }
+      function circle(g,cx,cy,r,fill,stroke){ const e=document.createElementNS('http://www.w3.org/2000/svg','circle'); e.setAttribute('cx',cx); e.setAttribute('cy',cy); e.setAttribute('r',r); e.setAttribute('fill',fill); e.setAttribute('stroke',stroke); g.appendChild(e); }
+      function path(g,d,{fill='none',stroke='#000',strokeWidth=1}={}){ const e=document.createElementNS('http://www.w3.org/2000/svg','path'); e.setAttribute('d',d); e.setAttribute('fill',fill); e.setAttribute('stroke',stroke); e.setAttribute('stroke-width',strokeWidth); g.appendChild(e); }
+      function rect(g,x,y,w,h,fill){ const e=document.createElementNS('http://www.w3.org/2000/svg','rect'); e.setAttribute('x',x); e.setAttribute('y',y); e.setAttribute('width',w); e.setAttribute('height',h); e.setAttribute('rx',3); e.setAttribute('ry',3); e.setAttribute('fill',fill); g.appendChild(e); }
+      function text(g,x,y,txt,{size=12,anchor='start',fill='#000'}={}){ const e=document.createElementNS('http://www.w3.org/2000/svg','text'); e.setAttribute('x',x); e.setAttribute('y',y); e.setAttribute('font-size',size); e.setAttribute('text-anchor',anchor); e.setAttribute('fill',fill); e.textContent=txt; g.appendChild(e); }
+      function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+      function asPts(){ return state.swapXY ? state.points.map(p=>({...p, x:p.y, y:p.x})) : state.points.slice(); }
+      function getDomain(){
+        const pts = asPts();
+        if (!pts.length) return {minX:0,maxX:1,minY:0,maxY:1};
+        const xs=pts.map(p=>p.x), ys=pts.map(p=>p.y);
+        const minX=Math.min(...xs), maxX=Math.max(...xs);
+        const minY=Math.min(...ys), maxY=Math.max(...ys);
+        const padX=(maxX-minX)*0.1 || 1, padY=(maxY-minY)*0.1 || 1;
+        return { minX:minX-padX, maxX:maxX+padX, minY:minY-padY, maxY:maxY+padY };
+      }
+
+      function exportA2(){
+        const pageWmm=594, pageHmm=420, margin=10;
+        const plotW=pageWmm-2*margin, plotH=pageHmm-2*margin;
+        const pts = asPts(); if (!pts.length){ alert('Нет точек'); return; }
+        const domain = getDomain();
+        const mmPerMeter_1_200 = 1000/200;
+        const domainW = (domain.maxX-domain.minX), domainH=(domain.maxY-domain.minY);
+        let desiredW = domainW * mmPerMeter_1_200, desiredH = domainH * mmPerMeter_1_200;
+        let scale=1;
+        const fit = Math.min(plotW/desiredW, plotH/desiredH);
+        if (fit < 1){ scale = fit; desiredW *= fit; desiredH *= fit; }
+        const mmX = linScale(domain.minX, domain.maxX, margin, margin+desiredW);
+        const mmY_up = linScale(domain.minY, domain.maxY, margin+desiredH, margin);
+
+        const raster = rasterizeIDW(pts, domain, state.cols, state.rows, state.idwPower);
+        const zs = pts.map(p=>p.z), minZ=Math.min(...zs), maxZ=Math.max(...zs);
+        const thresholds = buildThresholds(minZ, maxZ, state.contourStep);
+        function buildThresholds(minZ,maxZ,step){ if(!Number.isFinite(step)||step<=0) return []; const start=niceMin(minZ,step), end=niceMax(maxZ,step); const arr=[]; for(let v=start; v<=end; v+=step) arr.push(Number(v.toFixed(6))); return arr; }
+        const gen = d3c.contours().size([raster.cols, raster.rows]).smooth(state.smooth).thresholds(thresholds);
+        const conts = gen(raster.values);
+        const isMajor=(val)=>{ const i=thresholds.findIndex(t=>Math.abs(t-val)<1e-9); return i>=0 && (i % state.majorEvery === 0 || Math.abs(val-Math.round(val))<1e-6); };
+
+        const ringToD = (ring)=>{
+          let d='';
+          for(let i=0;i<ring.length;i++){
+            const gx=ring[i][0], gy=ring[i][1];
+            const x = domain.minX + (gx/(raster.cols-1))*(domain.maxX-domain.minX);
+            const y = domain.minY + (gy/(raster.rows-1))*(domain.maxY-domain.minY);
+            const X=mmX(x), Y=mmY_up(y);
+            d += (i===0?`M ${X} ${Y}`:` L ${X} ${Y}`);
+          }
+          return d+' Z';
+        };
+
+        const svg=[];
+        svg.push(`<?xml version="1.0" encoding="UTF-8"?>`);
+        svg.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${pageWmm}mm" height="${pageHmm}mm" viewBox="0 0 ${pageWmm} ${pageHmm}">`);
+        svg.push(`<rect x="0" y="0" width="${pageWmm}" height="${pageHmm}" fill="white"/>`);
+        const scaleText = scale>=0.999 ? '1:200' : '~1:'+Math.round(200/scale);
+        svg.push(`<text x="${margin}" y="${pageHmm - margin/2}" font-family="sans-serif" font-size="6">Масштаб ${scaleText} • A2 ${pageWmm}×${pageHmm} мм</text>`);
+        svg.push(`<rect x="${margin}" y="${margin}" width="${desiredW}" height="${desiredH}" fill="white" stroke="#E5E7EB"/>`);
+
+        const g = Number(state.gridSpacing)||25;
+        const xs=[], ys=[];
+        const x0 = niceMin(domain.minX, g), x1 = niceMax(domain.maxX, g);
+        const y0 = niceMin(domain.minY, g), y1 = niceMax(domain.maxY, g);
+        for(let x=x0;x<=x1+1e-9;x+=g){ const xmm = mmX(x); svg.push(`<line x1="${xmm}" y1="${margin}" x2="${xmm}" y2="${margin+desiredH}" stroke="#F1F5F9" stroke-width="0.2"/>`); svg.push(`<text x="${xmm}" y="${margin+desiredH+4}" font-size="3" text-anchor="middle" fill="#475569" font-family="sans-serif">${formatNum(x)}</text>`); }
+        for(let y=y0;y<=y1+1e-9;y+=g){ const ymm = mmY_up(y); svg.push(`<line x1="${margin}" y1="${ymm}" x2="${margin+desiredW}" y2="${ymm}" stroke="#F1F5F9" stroke-width="0.2"/>`); svg.push(`<text x="${margin-1}" y="${ymm+1}" font-size="3" text-anchor="end" fill="#475569" font-family="sans-serif">${formatNum(y)}</text>`); }
+
+        if (state.fillShading){
+          const color = (v)=>{
+            const t=(v - thresholds[0]) / Math.max(1e-9, thresholds[thresholds.length-1]-thresholds[0]);
+            const r = Math.round(255*Math.min(1,Math.max(0, t*1.2)));
+            const g = Math.round(200*Math.min(1,Math.max(0, t)));
+            const b = Math.round(200*(1-t));
+            return `rgba(${r},${g},${b},0.28)`;
+          };
+          conts.forEach(c=>{
+            c.coordinates.forEach(poly=>{
+              const d = poly.map(ringToD).join(' ');
+              svg.push(`<path d="${d}" fill="${color(c.value)}" stroke="none"/>`);
+            });
+          });
+        }
+
+        conts.forEach(c=>{
+          const stroke = isMajor(c.value)?'#334155':'#64748b';
+          const sw = isMajor(c.value)?0.4:0.25;
+          c.coordinates.forEach(poly=>{
+            const d = poly.map(ringToD).join(' ');
+            svg.push(`<path d="${d}" fill="none" stroke="${stroke}" stroke-width="${sw}"/>`);
+          });
+          const ring = c.coordinates[0]?.[0];
+          if (ring && ring.length>2){
+            const mid = ring[Math.floor(ring.length/2)];
+            const x = domain.minX + (mid[0]/(raster.cols-1))*(domain.maxX-domain.minX);
+            const y = domain.minY + (mid[1]/(raster.rows-1))*(domain.maxY-domain.minY);
+            const X=mmX(x), Y=mmY_up(y);
+            svg.push(`<rect x="${X-3}" y="${Y-2.5}" width="6" height="4" rx="1" ry="1" fill="#ffffffcc"/>`);
+            svg.push(`<text x="${X}" y="${Y+1}" font-size="3" text-anchor="middle" fill="#0f172a" font-family="sans-serif">${formatNum(c.value)}</text>`);
+          }
+        });
+
+        pts.forEach(p=>{
+          const X=mmX(p.x), Y=mmY_up(p.y);
+          svg.push(`<circle cx="${X}" cy="${Y}" r="1" fill="#0ea5e9" stroke="#0369a1" stroke-width="0.2"/>`);
+          svg.push(`<text x="${X+2}" y="${Y-2}" font-size="3" fill="#0f172a" font-family="sans-serif">${escapeXml(p.id??'')} <tspan fill="#475569">(${formatNum(p.x)}, ${formatNum(p.y)})</tspan> <tspan font-weight="600">${formatNum(p.z)}</tspan></text>`);
+        });
+
+        svg.push(`</svg>`);
+        const blob = new Blob([svg.join('\n')], {type:'image/svg+xml;charset=utf-8'});
+        const url = URL.createObjectURL(blob); const a=document.createElement('a');
+        a.href=url; a.download='topoplan_A2.svg'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      }
+
+      function rect(g,x,y,w,h,fill){ const e=document.createElementNS('http://www.w3.org/2000/svg','rect'); e.setAttribute('x',x); e.setAttribute('y',y); e.setAttribute('width',w); e.setAttribute('height',h); e.setAttribute('fill',fill); g.appendChild(e); }
+      function text(g,x,y,txt,{size=12,anchor='start',fill='#000'}={}){ const e=document.createElementNS('http://www.w3.org/2000/svg','text'); e.setAttribute('x',x); e.setAttribute('y',y); e.setAttribute('font-size',size); e.setAttribute('text-anchor',anchor); e.setAttribute('fill',fill); e.textContent=txt; g.appendChild(e); }
+      function path(g,d,{fill='none',stroke='#000',strokeWidth=1}={}){ const e=document.createElementNS('http://www.w3.org/2000/svg','path'); e.setAttribute('d',d); e.setAttribute('fill',fill); e.setAttribute('stroke',stroke); e.setAttribute('stroke-width',strokeWidth); g.appendChild(e); }
+      function circle(g,cx,cy,r,fill,stroke){ const e=document.createElementNS('http://www.w3.org/2000/svg','circle'); e.setAttribute('cx',cx); e.setAttribute('cy',cy); e.setAttribute('r',r); e.setAttribute('fill',fill); e.setAttribute('stroke',stroke); g.appendChild(e); }
+      function line(g,x1,y1,x2,y2,stroke,sw){ const e = document.createElementNS('http://www.w3.org/2000/svg','line'); e.setAttribute('x1',x1); e.setAttribute('y1',y1); e.setAttribute('x2',x2); e.setAttribute('y2',y2); e.setAttribute('stroke',stroke); e.setAttribute('stroke-width',sw); g.appendChild(e); }
+      function escapeXml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    </script>
+  </body>
+</html>
