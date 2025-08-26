@@ -106,10 +106,13 @@
       </div>
     </div>
 
-    <!-- d3-contour as ESM -->
-    <script type="module">
-      import * as d3c from 'https://unpkg.com/d3-contour@3?module';
-
+    <!-- d3-contour via CDN -->
+    <script src="https://d3js.org/d3-contour.v3.min.js"></script>
+    <script>
+      const d3c = window.d3;
+      if(!d3c){
+        alert('Не удалось загрузить библиотеку d3-contour. Проверьте подключение к интернету.');
+      }
       const $ = (id)=>document.getElementById(id);
       const state = {
         points: [], swapXY:false, invertY:true,
@@ -158,13 +161,13 @@
           if (raw.length<3) continue;
           let [x,y,z,id] = raw;
           const px=Number(x), py=Number(y), pz=Number(z);
-          if (Number.isFinite(px)&&Number.isFinite(py)&&Number.isFinite(pz)) pts.push({id:id??String(i-(header?0:-1)), x:px, y:py, z:pz});
+          if (Number.isFinite(px)&&Number.isFinite(py)&&Number.isFinite(pz)) pts.push({id:(id!=null?id:String(i-(header?0:-1))), x:px, y:py, z:pz});
         }
         return pts;
       }
       function pointsToCSV(points){
         const header='x;y;z;id';
-        const rows=points.map(p=>`${p.x};${p.y};${p.z};${p.id??''}`);
+        const rows=points.map(p=>`${p.x};${p.y};${p.z};${p.id!=null?p.id:''}`);
         return [header,...rows].join('\n');
       }
       function rasterizeIDW(points, {minX,maxX,minY,maxY}, cols, rows, power=2, eps=1e-6){
@@ -190,7 +193,7 @@
 
       const svgEl = $('svg'), statsEl = $('stats'), csvEl = $('csv');
       $('btnExample').onclick = ()=>{ csvEl.value = EXAMPLE_CSV; loadFromCsv(); };
-      $('fileCsv').onchange = (e)=>{ const f=e.target.files?.[0]; if(!f) return; const r=new FileReader(); r.onload=(ev)=>{ csvEl.value=String(ev.target?.result||''); loadFromCsv(); }; r.readAsText(f); };
+      $('fileCsv').onchange = (e)=>{ const files = e.target && e.target.files; const f = files && files[0]; if(!f) return; const r=new FileReader(); r.onload=(ev)=>{ const result = ev.target && ev.target.result; csvEl.value=String(result || ''); loadFromCsv(); }; r.readAsText(f); };
       $('btnClear').onclick = ()=>{ if(confirm('Удалить все точки?')){ state.points=[]; csvEl.value='x;y;z;id\n'; render(); } };
       $('swapXY').onchange = (e)=>{ state.swapXY=e.target.checked; render(); };
       $('invertY').onchange = (e)=>{ state.invertY=e.target.checked; render(); };
@@ -331,7 +334,7 @@
             const d = poly.map(ringToPath).join(' ');
             path(contourLineLayer, d, {fill:'none', stroke, strokeWidth:sw});
           });
-          const ring = cont.coordinates[0]?.[0];
+          const ring = cont.coordinates[0] ? cont.coordinates[0][0] : null;
           if (ring && ring.length>2){
             const mid = ring[Math.floor(ring.length/2)];
             const {x,y} = gridToDomain(mid[0], mid[1], raster, domain);
@@ -348,7 +351,7 @@
             if (state.showLabels){
               const t = document.createElementNS('http://www.w3.org/2000/svg','text');
               t.setAttribute('x', sx+6); t.setAttribute('y', sy-6); t.setAttribute('font-size','11'); t.setAttribute('fill','#0f172a');
-              t.innerHTML = `${escapeHtml(p.id??('P'+(i+1)))} <tspan fill="#475569">(${formatNum(p.x)}, ${formatNum(p.y)})</tspan> <tspan font-weight="600">${formatNum(p.z)}</tspan>`;
+              t.innerHTML = `${escapeHtml(p.id!=null?p.id:('P'+(i+1)))} <tspan fill="#475569">(${formatNum(p.x)}, ${formatNum(p.y)})</tspan> <tspan font-weight="600">${formatNum(p.z)}</tspan>`;
               labelsLayer.appendChild(t);
             }
           });
@@ -384,7 +387,7 @@
           const zs = pts.map(p=>p.z); const minZ=Math.min(...zs), maxZ=Math.max(...zs);
           addStat(`Высоты: <b>${formatNum(minZ)}</b> … <b>${formatNum(maxZ)}</b>`);
         }
-        addStat(`Горизонталей: <b>${thresholds?.length??0}</b>`);
+        addStat(`Горизонталей: <b>${thresholds && thresholds.length ? thresholds.length : 0}</b>`);
         function addStat(html){ const span=document.createElement('span'); span.innerHTML=html; statsEl.appendChild(span); }
       }
 
@@ -478,7 +481,7 @@
             const d = poly.map(ringToD).join(' ');
             svg.push(`<path d="${d}" fill="none" stroke="${stroke}" stroke-width="${sw}"/>`);
           });
-          const ring = c.coordinates[0]?.[0];
+          const ring = c.coordinates[0] ? c.coordinates[0][0] : null;
           if (ring && ring.length>2){
             const mid = ring[Math.floor(ring.length/2)];
             const x = domain.minX + (mid[0]/(raster.cols-1))*(domain.maxX-domain.minX);
@@ -492,7 +495,7 @@
         pts.forEach(p=>{
           const X=mmX(p.x), Y=mmY_up(p.y);
           svg.push(`<circle cx="${X}" cy="${Y}" r="1" fill="#0ea5e9" stroke="#0369a1" stroke-width="0.2"/>`);
-          svg.push(`<text x="${X+2}" y="${Y-2}" font-size="3" fill="#0f172a" font-family="sans-serif">${escapeXml(p.id??'')} <tspan fill="#475569">(${formatNum(p.x)}, ${formatNum(p.y)})</tspan> <tspan font-weight="600">${formatNum(p.z)}</tspan></text>`);
+            svg.push(`<text x="${X+2}" y="${Y-2}" font-size="3" fill="#0f172a" font-family="sans-serif">${escapeXml(p.id!=null?p.id:'')} <tspan fill="#475569">(${formatNum(p.x)}, ${formatNum(p.y)})</tspan> <tspan font-weight="600">${formatNum(p.z)}</tspan></text>`);
         });
 
         svg.push(`</svg>`);
