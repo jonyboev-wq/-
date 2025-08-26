@@ -150,7 +150,17 @@
       function niceMin(val, step) { return Math.floor(val / step) * step; }
       function niceMax(val, step) { return Math.ceil(val / step) * step; }
       function linScale(a,b,A,B){ const d=b-a, r=B-A; return (v)=>A + (v-a)*r/(d||1); }
-      function formatNum(n){ if (Math.abs(n)>=1000 || Math.abs(n)<0.01) return n.toExponential(2); return Number.isInteger(n)? String(n) : n.toFixed(2); }
+      function formatNum(n){
+        const rounded = Math.round((n + Number.EPSILON) * 100) / 100;
+        if (Number.isInteger(rounded)) {
+          return rounded.toLocaleString('en-US', { useGrouping: false });
+        }
+        return rounded.toLocaleString('en-US', {
+          useGrouping: false,
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        });
+      }
       function parsePoints(text){
         const lines = String(text).replace(/\r/g,'\n').split(/\n+/).map(s=>s.trim()).filter(Boolean);
         if (!lines.length) return [];
