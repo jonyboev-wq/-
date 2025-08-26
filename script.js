@@ -21,20 +21,66 @@ window.addEventListener('resize', () => {
   drawGrid();
 });
 
+// Набор точек, полученный из таблицы
+const defaultPoints = [
+  { x: 248.33, y: 1037.16, h: 220.84 },
+  { x: 248.44, y: 1036.95, h: 220.815 },
+  { x: 252.37, y: 1036.25, h: 220.842 },
+  { x: 261.16, y: 1034.19, h: 220.956 },
+  { x: 266.47, y: 1032.11, h: 221.21 },
+  { x: 268.87, y: 1024.21, h: 221.284 },
+  { x: 273.21, y: 1023.33, h: 220.977 },
+  { x: 267.08, y: 1023.77, h: 220.867 },
+  { x: 261.11, y: 1023.71, h: 220.822 },
+  { x: 254.82, y: 1024.07, h: 220.862 },
+  { x: 253.24, y: 1024.5, h: 221.312 },
+  { x: 253.15, y: 1021.11, h: 221.032 },
+  { x: 253.63, y: 1014.08, h: 221.25 },
+  { x: 253.88, y: 1009.31, h: 221.45 },
+  { x: 254.0, y: 1008.54, h: 221.43 },
+  { x: 257.39, y: 1008.3, h: 221.586 },
+  { x: 257.32, y: 1009.83, h: 221.148 },
+  { x: 253.23, y: 1009.85, h: 221.086 },
+  { x: 253.21, y: 1010.83, h: 220.91 },
+  { x: 253.28, y: 1013.29, h: 220.942 },
+  { x: 253.71, y: 1017.67, h: 221.102 },
+  { x: 258.62, y: 1017.67, h: 221.094 },
+  { x: 259.52, y: 1011.83, h: 221.108 },
+  { x: 259.81, y: 1006.6, h: 221.062 },
+  { x: 258.39, y: 1005.91, h: 221.066 },
+  { x: 273.79, y: 1009.67, h: 221.042 },
+  { x: 268.96, y: 1004.5, h: 221.098 },
+  { x: 260.39, y: 1004.44, h: 221.052 },
+  { x: 244.31, y: 1028.7, h: 221.016 },
+  { x: 229.39, y: 1044.38, h: 221.132 }
+];
+
 const tbody = document.querySelector('#point-table tbody');
-for (let i = 0; i < 25; i++) {
+
+function createRow(x = '', y = '', h = '') {
   const row = document.createElement('tr');
-  for (let j = 0; j < 3; j++) {
+  [x, y, h].forEach(val => {
     const cell = document.createElement('td');
     const input = document.createElement('input');
     input.type = 'number';
+    if (val !== '') input.value = val;
     cell.appendChild(input);
     row.appendChild(cell);
-  }
+  });
   tbody.appendChild(row);
 }
 
-document.getElementById('plot').addEventListener('click', () => {
+function populateTable(data) {
+  tbody.innerHTML = '';
+  data.forEach(p => createRow(p.x, p.y, p.h));
+}
+
+let selected = null;
+
+function plotFromTable() {
+  pointGroup.innerHTML = '';
+  lineGroup.innerHTML = '';
+  selected = null;
   const rows = tbody.querySelectorAll('tr');
   rows.forEach(row => {
     const inputs = row.querySelectorAll('input');
@@ -45,9 +91,13 @@ document.getElementById('plot').addEventListener('click', () => {
       addPoint(x, y, h);
     }
   });
-});
+}
 
-let selected = null;
+populateTable(defaultPoints);
+for (let i = 0; i < 5; i++) createRow();
+plotFromTable();
+
+document.getElementById('plot').addEventListener('click', plotFromTable);
 
 svg.addEventListener('click', e => {
   if (e.target !== svg) return;
