@@ -1,33 +1,45 @@
 <!doctype html>
 <html lang="ru">
-  <head>
-    <meta charset="UTF-8">
-    <title>Связь точек</title>
-    <style>
-      body,html { margin:0; padding:0; height:100%; position:relative; }
-      svg { width:100%; height:100%; display:block; background:#f8fafc; }
-      .point { fill:#0ea5e9; stroke:#0369a1; stroke-width:2; cursor:pointer; }
-      .point.selected { stroke:#f59e0b; }
-      .line { stroke:#334155; stroke-width:2; cursor:pointer; }
-      .grid { stroke:#e2e8f0; stroke-width:1; pointer-events:none; }
-      .label { font-size:12px; fill:#1e293b; user-select:none; pointer-events:none; }
-      #controls { position:absolute; top:10px; left:10px; background:white; padding:10px; border:1px solid #cbd5e1; font-family:sans-serif; font-size:14px; }
-      #controls table { border-collapse:collapse; }
-      #controls th, #controls td { border:1px solid #cbd5e1; padding:2px; }
-      #controls input { width:60px; }
-    </style>
-  </head>
-  <body>
-    <div id="controls">
-      <table id="point-table">
-        <thead>
-          <tr><th>X</th><th>Y</th><th>H</th></tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-      <button id="plot">Нарисовать</button>
+<head>
+  <meta charset="UTF-8">
+  <title>ТопоРедактор</title>
+  <style>
+    body, html { margin:0; padding:0; height:100%; font-family: sans-serif; }
+    #controls {
+      position:absolute; top:10px; left:10px; width:260px;
+      background:#fff; border:1px solid #cbd5e1; padding:10px; font-size:14px;
+      box-shadow:0 2px 4px rgba(0,0,0,.1); overflow:auto; max-height:90%;
+    }
+    #controls textarea { width:100%; }
+    #controls label { display:block; margin-top:4px; }
+    #controls input[type=number] { width:60px; }
+    svg { width:100%; height:100%; display:block; background:#f8fafc; }
+    .grid line { stroke:#e2e8f0; stroke-width:0.5; }
+    .points circle { fill:#0ea5e9; stroke:#0369a1; stroke-width:0.5; }
+    .points text { font-size:3px; fill:#1e293b; }
+    .contours path { stroke:#64748b; stroke-width:0.5; fill:none; }
+  </style>
+</head>
+<body>
+  <div id="controls">
+    <strong>Данные (x,y,h)</strong>
+    <textarea id="data" rows="10"></textarea>
+    <div style="margin-top:6px">
+      Шаг сетки: <input type="number" id="gridStep" value="1" step="0.1">
+      Горизонталь: <input type="number" id="contourStep" value="0.2" step="0.01">
     </div>
-    <svg id="canvas"></svg>
-    <script src="script.js"></script>
-  </body>
+    <label><input type="checkbox" id="showGrid" checked>Показывать сетку</label>
+    <label><input type="checkbox" id="showPoints" checked>Показывать точки</label>
+    <div style="margin-top:6px">
+      <input type="file" id="fileInput">
+    </div>
+    <div style="margin-top:6px">
+      <button id="draw">Нарисовать</button>
+      <button id="clear">Очистить</button>
+    </div>
+  </div>
+  <svg id="canvas"></svg>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="script.js"></script>
+</body>
 </html>
