@@ -57,6 +57,12 @@
         </section>
 
         <section class="space-y-2">
+          <h2 class="font-semibold">Связи</h2>
+          <label class="flex items-center gap-2 text-sm"><input id="edgeMode" type="checkbox" /> Режим линий</label>
+          <button id="edgeClear" class="px-2 py-1 text-xs rounded bg-slate-100 hover:bg-slate-200">Очистить линии</button>
+        </section>
+
+        <section class="space-y-2">
           <h2 class="font-semibold">Интерполяция и растр</h2>
           <div class="grid grid-cols-2 gap-2 items-center text-sm">
             <label>Столбцов (cols)</label>
@@ -119,7 +125,9 @@
         gridSpacing:20, showGrid:true, showPoints:true, showLabels:true, snapToGrid:false,
         cols:180, rows:180, idwPower:2.0, smooth:true,
         contourStep:0.1, majorEvery:10, width:1100, height:720, fillShading:false,
+        edges: [], edgeMode:false, edgeSnapPx:10, edgeHitPx:6,
       };
+      let edgePending = null;
       const EXAMPLE_CSV = `x;y;z;id
 0;0;120;P1
 50;0;121;P2
@@ -198,7 +206,7 @@
       const svgEl = $('svg'), statsEl = $('stats'), csvEl = $('csv');
       $('btnExample').onclick = ()=>{ csvEl.value = EXAMPLE_CSV; loadFromCsv(); };
       $('fileCsv').onchange = (e)=>{ const files = e.target && e.target.files; const f = files && files[0]; if(!f) return; const r=new FileReader(); r.onload=(ev)=>{ const result = ev.target && ev.target.result; csvEl.value=String(result || ''); loadFromCsv(); }; r.readAsText(f); };
-      $('btnClear').onclick = ()=>{ if(confirm('Удалить все точки?')){ state.points=[]; csvEl.value='x;y;z;id\n'; render(); } };
+      $('btnClear').onclick = ()=>{ if(confirm('Удалить все точки?')){ state.points=[]; state.edges=[]; edgePending=null; csvEl.value='x;y;z;id\n'; render(); } };
       $('swapXY').onchange = (e)=>{ state.swapXY=e.target.checked; render(); };
       $('invertY').onchange = (e)=>{ state.invertY=e.target.checked; render(); };
       $('gridSpacing').oninput = (e)=>{ state.gridSpacing=Number(e.target.value); render(); };
@@ -206,6 +214,8 @@
       $('showPoints').onchange = (e)=>{ state.showPoints=e.target.checked; render(); };
       $('showLabels').onchange = (e)=>{ state.showLabels=e.target.checked; render(); };
       $('snapToGrid').onchange = (e)=>{ state.snapToGrid=e.target.checked; };
+      $('edgeMode').onchange = (e)=>{ state.edgeMode = e.target.checked; edgePending=null; svgEl.classList.toggle('cursor-crosshair', !state.edgeMode); render(); };
+      $('edgeClear').onclick = ()=>{ state.edges=[]; edgePending=null; render(); };
       $('cols').oninput = (e)=>{ state.cols=Number(e.target.value); $('colsVal').textContent=state.cols; render(); };
       $('rows').oninput = (e)=>{ state.rows=Number(e.target.value); $('rowsVal').textContent=state.rows; render(); };
       $('idwPower').oninput = (e)=>{ state.idwPower=Number(e.target.value); render(); };
@@ -233,7 +243,7 @@
       rectPlot.setAttribute('width', width-2*pad); rectPlot.setAttribute('height', height-2*pad);
       rectPlot.setAttribute('fill', '#fff'); rectPlot.setAttribute('stroke', '#e5e7eb');
       svgEl.appendChild(rectPlot);
-      const gridLayer = newLayer(), contourFillLayer=newLayer(), contourLineLayer=newLayer(), pointsLayer=newLayer(), labelsLayer=newLayer();
+      const gridLayer = newLayer(), contourFillLayer=newLayer(), contourLineLayer=newLayer(), connectionsLayer=newLayer(), pointsLayer=newLayer(), labelsLayer=newLayer();
       text(svgEl, width/2, height-10, 'X', {size:12,anchor:'middle',fill:'#475569'});
       const tY = document.createElementNS('http://www.w3.org/2000/svg','text');
       tY.setAttribute('x',14); tY.setAttribute('y',height/2); tY.setAttribute('text-anchor','middle'); tY.setAttribute('font-size','12'); tY.setAttribute('fill','#475569'); tY.setAttribute('transform',`rotate(-90 14 ${height/2})`); tY.textContent='Y'; svgEl.appendChild(tY);
@@ -246,16 +256,29 @@
         const x = domain.minX + ((sp.x - pad) / (width - 2*pad)) * (domain.maxX - domain.minX);
         const yScreen = domain.minY + ((sp.y - pad) / (height - 2*pad)) * (domain.maxY - domain.minY);
         const y = state.invertY ? (domain.maxY - (yScreen - domain.minY)) : yScreen;
+
+        if (state.edgeMode){
+          const np = nearestPoint(sp.x, sp.y);
+          if (np){
+            if (!edgePending){ edgePending = np.p; render(); }
+            else { const a=edgePending.id; edgePending=null; addEdge(a, np.p.id); }
+          } else if (edgePending){ edgePending=null; render(); }
+          return;
+        }
+
         if (e.shiftKey){
           if (!state.points.length) return;
-          let bi=0, bd=Infinity;
-          const pts = asPts();
+          let bi=0, bd=Infinity; const pts = asPts();
           for (let i=0;i<pts.length;i++){
             const dx=pts[i].x-x, dy=pts[i].y-y, d=dx*dx+dy*dy;
             if (d<bd){bd=d; bi=i;}
           }
-          state.points.splice(bi,1); csvEl.value = pointsToCSV(state.points); render(); return;
+          const removedId = state.points[bi].id;
+          state.points.splice(bi,1);
+          state.edges = state.edges.filter(e=>e.aId!==removedId && e.bId!==removedId);
+          csvEl.value = pointsToCSV(state.points); render(); return;
         }
+
         const zStr = prompt('Высота точки (z):','0'); if (zStr===null) return;
         const z = Number(zStr); if (!Number.isFinite(z)) return alert('Нужно число.');
         const id = `P${state.points.length+1}`;
@@ -280,7 +303,7 @@
       function loadFromCsv(){ state.points = parsePoints(csvEl.value); render(); }
 
       function render(){
-        gridLayer.innerHTML=''; contourFillLayer.innerHTML=''; contourLineLayer.innerHTML=''; pointsLayer.innerHTML=''; labelsLayer.innerHTML='';
+        gridLayer.innerHTML=''; contourFillLayer.innerHTML=''; contourLineLayer.innerHTML=''; connectionsLayer.innerHTML=''; pointsLayer.innerHTML=''; labelsLayer.innerHTML='';
         const pts = asPts();
         const domain = getDomain();
         const X = linScale(domain.minX, domain.maxX, pad, width-pad);
@@ -348,6 +371,23 @@
           }
         });
 
+        state.edges.forEach(({aId,bId})=>{
+          const a = pts.find(p=>p.id===aId);
+          const b = pts.find(p=>p.id===bId);
+          if(!a || !b) return;
+          const {X:xa, Y:ya} = toScreen(a.x,a.y);
+          const {X:xb, Y:yb} = toScreen(b.x,b.y);
+          const l = document.createElementNS('http://www.w3.org/2000/svg','line');
+          l.setAttribute('x1',xa); l.setAttribute('y1',ya); l.setAttribute('x2',xb); l.setAttribute('y2',yb);
+          l.setAttribute('stroke','#22c55e'); l.setAttribute('stroke-width','2');
+          connectionsLayer.appendChild(l);
+          const hit = document.createElementNS('http://www.w3.org/2000/svg','line');
+          hit.setAttribute('x1',xa); hit.setAttribute('y1',ya); hit.setAttribute('x2',xb); hit.setAttribute('y2',yb);
+          hit.setAttribute('stroke','transparent'); hit.setAttribute('stroke-width','12'); hit.setAttribute('cursor','pointer');
+          hit.addEventListener('click', (ev)=>{ ev.stopPropagation(); if(state.edgeMode) removeEdge(aId,bId); });
+          connectionsLayer.appendChild(hit);
+        });
+
         if (state.showPoints){
           pts.forEach((p,i)=>{
             const {X:sx, Y:sy} = toScreen(p.x,p.y);
@@ -359,6 +399,14 @@
               labelsLayer.appendChild(t);
             }
           });
+        }
+
+        if (edgePending){
+          const {X:sx, Y:sy} = toScreen(edgePending.x, edgePending.y);
+          const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+          c.setAttribute('cx',sx); c.setAttribute('cy',sy); c.setAttribute('r',6);
+          c.setAttribute('fill','none'); c.setAttribute('stroke','#22c55e'); c.setAttribute('stroke-width','1.5');
+          pointsLayer.appendChild(c);
         }
 
         updateStats(pts, domain, thresholds);
@@ -392,6 +440,7 @@
           addStat(`Высоты: <b>${formatNum(minZ)}</b> … <b>${formatNum(maxZ)}</b>`);
         }
         addStat(`Горизонталей: <b>${thresholds && thresholds.length ? thresholds.length : 0}</b>`);
+        addStat(`Линий: <b>${state.edges.length}</b>`);
         function addStat(html){ const span=document.createElement('span'); span.innerHTML=html; statsEl.appendChild(span); }
       }
 
@@ -411,6 +460,47 @@
         const minY=Math.min(...ys), maxY=Math.max(...ys);
         const padX=(maxX-minX)*0.1 || 1, padY=(maxY-minY)*0.1 || 1;
         return { minX:minX-padX, maxX:maxX+padX, minY:minY-padY, maxY:maxY+padY };
+      }
+
+      function nearestPoint(sx, sy){
+        const pts = asPts();
+        const domain = getDomain();
+        const X = linScale(domain.minX, domain.maxX, pad, width-pad);
+        const Ybase = linScale(domain.minY, domain.maxY, height-pad, pad);
+        const Yinv = linScale(domain.minY, domain.maxY, pad, height-pad);
+        let best=null, bestDist=Infinity;
+        for (const p of pts){
+          const px = X(p.x);
+          const py = state.invertY?Ybase(p.y):Yinv(p.y);
+          const d = Math.hypot(px-sx, py-sy);
+          if (d<bestDist){ bestDist=d; best=p; }
+        }
+        return (best && bestDist<=state.edgeSnapPx) ? {p:best, distPx:bestDist} : null;
+      }
+
+      function distToSegmentPx(x,y,x1,y1,x2,y2){
+        const dx=x2-x1, dy=y2-y1;
+        const l2=dx*dx+dy*dy;
+        if(l2===0) return Math.hypot(x-x1,y-y1);
+        let t=((x-x1)*dx+(y-y1)*dy)/l2;
+        t=Math.max(0,Math.min(1,t));
+        const projx=x1+t*dx, projy=y1+t*dy;
+        return Math.hypot(x-projx,y-projy);
+      }
+
+      function addEdge(aId,bId){
+        if (aId===bId) return;
+        const [a,b] = aId<bId ? [aId,bId] : [bId,aId];
+        if (state.edges.some(e=>e.aId===a && e.bId===b)) return;
+        state.edges.push({aId:a, bId:b});
+        render();
+      }
+
+      function removeEdge(aId,bId){
+        const [a,b] = aId<bId ? [aId,bId] : [bId,aId];
+        const i = state.edges.findIndex(e=>e.aId===a && e.bId===b);
+        if (i>=0) state.edges.splice(i,1);
+        render();
       }
 
       function exportA2(){
