@@ -126,6 +126,7 @@
         cols:180, rows:180, idwPower:2.0, smooth:true,
         contourStep:0.1, majorEvery:10, width:1100, height:720, fillShading:false,
         edges: [], edgeMode:false, edgeSnapPx:10, edgeHitPx:6,
+        panX:0, panY:0,
       };
       let edgePending = null;
       const EXAMPLE_CSV = `x;y;z;id
@@ -206,7 +207,7 @@
       const svgEl = $('svg'), statsEl = $('stats'), csvEl = $('csv');
       $('btnExample').onclick = ()=>{ csvEl.value = EXAMPLE_CSV; loadFromCsv(); };
       $('fileCsv').onchange = (e)=>{ const files = e.target && e.target.files; const f = files && files[0]; if(!f) return; const r=new FileReader(); r.onload=(ev)=>{ const result = ev.target && ev.target.result; csvEl.value=String(result || ''); loadFromCsv(); }; r.readAsText(f); };
-      $('btnClear').onclick = ()=>{ if(confirm('Удалить все точки?')){ state.points=[]; state.edges=[]; edgePending=null; csvEl.value='x;y;z;id\n'; render(); } };
+      $('btnClear').onclick = ()=>{ if(confirm('Удалить все точки?')){ state.points=[]; state.edges=[]; edgePending=null; state.panX=0; state.panY=0; csvEl.value='x;y;z;id\n'; render(); } };
       $('swapXY').onchange = (e)=>{ state.swapXY=e.target.checked; render(); };
       $('invertY').onchange = (e)=>{ state.invertY=e.target.checked; render(); };
       $('gridSpacing').oninput = (e)=>{ state.gridSpacing=Number(e.target.value); render(); };
@@ -233,6 +234,17 @@
         const url = URL.createObjectURL(blob); const a=document.createElement('a');
         a.href=url; a.download='template.csv'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
       };
+
+      document.addEventListener('keydown', (e)=>{
+        if(['INPUT','TEXTAREA'].includes(document.activeElement.tagName)) return;
+        const step = Number(state.gridSpacing)||20;
+        switch(e.key){
+          case 'ArrowLeft': state.panX -= step; render(); e.preventDefault(); break;
+          case 'ArrowRight': state.panX += step; render(); e.preventDefault(); break;
+          case 'ArrowUp': state.panY += step; render(); e.preventDefault(); break;
+          case 'ArrowDown': state.panY -= step; render(); e.preventDefault(); break;
+        }
+      });
 
       const width=state.width, height=state.height, pad=60;
       svgEl.setAttribute('width', width); svgEl.setAttribute('height', height);
@@ -300,7 +312,7 @@
       $('btnSvgA2').onclick = exportA2;
 
       csvEl.value = EXAMPLE_CSV; loadFromCsv();
-      function loadFromCsv(){ state.points = parsePoints(csvEl.value); render(); }
+      function loadFromCsv(){ state.points = parsePoints(csvEl.value); state.panX=0; state.panY=0; render(); }
 
       function render(){
         gridLayer.innerHTML=''; contourFillLayer.innerHTML=''; contourLineLayer.innerHTML=''; connectionsLayer.innerHTML=''; pointsLayer.innerHTML=''; labelsLayer.innerHTML='';
@@ -454,12 +466,17 @@
       function asPts(){ return state.swapXY ? state.points.map(p=>({...p, x:p.y, y:p.x})) : state.points.slice(); }
       function getDomain(){
         const pts = asPts();
-        if (!pts.length) return {minX:0,maxX:1,minY:0,maxY:1};
+        if (!pts.length) return {minX:state.panX, maxX:state.panX+1, minY:state.panY, maxY:state.panY+1};
         const xs=pts.map(p=>p.x), ys=pts.map(p=>p.y);
         const minX=Math.min(...xs), maxX=Math.max(...xs);
         const minY=Math.min(...ys), maxY=Math.max(...ys);
         const padX=(maxX-minX)*0.1 || 1, padY=(maxY-minY)*0.1 || 1;
-        return { minX:minX-padX, maxX:maxX+padX, minY:minY-padY, maxY:maxY+padY };
+        return {
+          minX:minX-padX+state.panX,
+          maxX:maxX+padX+state.panX,
+          minY:minY-padY+state.panY,
+          maxY:maxY+padY+state.panY,
+        };
       }
 
       function nearestPoint(sx, sy){
