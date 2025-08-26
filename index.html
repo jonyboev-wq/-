@@ -35,7 +35,7 @@
             <button id="btnTemplate" class="px-2 py-1 text-xs rounded bg-slate-100 hover:bg-slate-200">Шаблон CSV</button>
           </div>
           <div class="flex gap-3">
-            <label class="flex items-center gap-2 text-sm"><input id="swapXY" type="checkbox" /> Поменять X/Y</label>
+            <label class="flex items-center gap-2 text-sm"><input id="swapXY" type="checkbox" checked /> Поменять X/Y</label>
             <label class="flex items-center gap-2 text-sm"><input id="invertY" type="checkbox" checked /> Ось Y вверх</label>
           </div>
         </section>
@@ -44,7 +44,7 @@
           <h2 class="font-semibold">Сетка и точки</h2>
           <div class="grid grid-cols-2 gap-2 items-center text-sm">
             <label>Шаг сетки (м)</label>
-            <input id="gridSpacing" type="number" class="border rounded p-1" value="25" />
+            <input id="gridSpacing" type="number" class="border rounded p-1" value="20" />
             <label>Показывать сетку</label>
             <input id="showGrid" type="checkbox" checked />
             <label>Показывать точки</label>
@@ -60,12 +60,12 @@
           <h2 class="font-semibold">Интерполяция и растр</h2>
           <div class="grid grid-cols-2 gap-2 items-center text-sm">
             <label>Столбцов (cols)</label>
-            <input id="cols" type="range" min="40" max="240" value="120" />
-            <div class="text-right text-xs text-slate-500" id="colsVal">120</div>
+            <input id="cols" type="range" min="40" max="240" value="180" />
+            <div class="text-right text-xs text-slate-500" id="colsVal">180</div>
 
             <label>Строк (rows)</label>
-            <input id="rows" type="range" min="40" max="240" value="120" />
-            <div class="text-right text-xs text-slate-500" id="rowsVal">120</div>
+            <input id="rows" type="range" min="40" max="240" value="180" />
+            <div class="text-right text-xs text-slate-500" id="rowsVal">180</div>
 
             <label>Степень IDW</label>
             <input id="idwPower" type="number" step="0.1" class="border rounded p-1" value="2" />
@@ -79,9 +79,9 @@
           <h2 class="font-semibold">Горизонтали</h2>
           <div class="grid grid-cols-2 gap-2 items-center text-sm">
             <label>Шаг (м)</label>
-            <input id="contourStep" type="number" step="0.1" class="border rounded p-1" value="0.5" />
+            <input id="contourStep" type="number" step="0.1" class="border rounded p-1" value="0.1" />
             <label>Основная через</label>
-            <input id="majorEvery" type="number" class="border rounded p-1" value="5" />
+            <input id="majorEvery" type="number" class="border rounded p-1" value="10" />
             <label>Цветовая заливка</label>
             <input id="fillShading" type="checkbox" />
           </div>
@@ -115,10 +115,10 @@
       }
       const $ = (id)=>document.getElementById(id);
       const state = {
-        points: [], swapXY:false, invertY:true,
-        gridSpacing:25, showGrid:true, showPoints:true, showLabels:true, snapToGrid:false,
-        cols:120, rows:120, idwPower:2, smooth:true,
-        contourStep:0.5, majorEvery:5, width:1100, height:720, fillShading:false,
+        points: [], swapXY:true, invertY:true,
+        gridSpacing:20, showGrid:true, showPoints:true, showLabels:true, snapToGrid:false,
+        cols:180, rows:180, idwPower:2.0, smooth:true,
+        contourStep:0.1, majorEvery:10, width:1100, height:720, fillShading:false,
       };
       const EXAMPLE_CSV = `x;y;z;id
 0;0;120;P1
@@ -151,15 +151,9 @@
       function niceMax(val, step) { return Math.ceil(val / step) * step; }
       function linScale(a,b,A,B){ const d=b-a, r=B-A; return (v)=>A + (v-a)*r/(d||1); }
       function formatNum(n){
+        if(!Number.isFinite(n)) return '';
         const rounded = Math.round((n + Number.EPSILON) * 100) / 100;
-        if (Number.isInteger(rounded)) {
-          return rounded.toLocaleString('en-US', { useGrouping: false });
-        }
-        return rounded.toLocaleString('en-US', {
-          useGrouping: false,
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        });
+        return Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(2);
       }
       function parsePoints(text){
         const lines = String(text).replace(/\r/g,'\n').split(/\n+/).map(s=>s.trim()).filter(Boolean);
@@ -295,7 +289,7 @@
         const toScreen = (x,y)=>({X:X(x), Y:(state.invertY?Ybase(y):Yinv(y))});
 
         if (state.showGrid){
-          const gs = Number(state.gridSpacing)||25;
+          const gs = Number(state.gridSpacing)||20;
           const x0 = niceMin(domain.minX, gs), x1 = niceMax(domain.maxX, gs);
           const y0 = niceMin(domain.minY, gs), y1 = niceMax(domain.maxY, gs);
           for (let x=x0;x<=x1+1e-9;x+=gs){
@@ -461,7 +455,7 @@
         svg.push(`<text x="${margin}" y="${pageHmm - margin/2}" font-family="sans-serif" font-size="6">Масштаб ${scaleText} • A2 ${pageWmm}×${pageHmm} мм</text>`);
         svg.push(`<rect x="${margin}" y="${margin}" width="${desiredW}" height="${desiredH}" fill="white" stroke="#E5E7EB"/>`);
 
-        const g = Number(state.gridSpacing)||25;
+        const g = Number(state.gridSpacing)||20;
         const xs=[], ys=[];
         const x0 = niceMin(domain.minX, g), x1 = niceMax(domain.maxX, g);
         const y0 = niceMin(domain.minY, g), y1 = niceMax(domain.maxY, g);
