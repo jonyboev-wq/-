@@ -205,6 +205,10 @@
       }
 
       const svgEl = $('svg'), statsEl = $('stats'), csvEl = $('csv');
+      csvEl.addEventListener('input', () => {
+        state.points = parsePoints(csvEl.value);
+        render();
+      });
       $('btnExample').onclick = ()=>{ csvEl.value = EXAMPLE_CSV; loadFromCsv(); };
       $('fileCsv').onchange = (e)=>{ const files = e.target && e.target.files; const f = files && files[0]; if(!f) return; const r=new FileReader(); r.onload=(ev)=>{ const result = ev.target && ev.target.result; csvEl.value=String(result || ''); loadFromCsv(); }; r.readAsText(f); };
       $('btnClear').onclick = ()=>{ if(confirm('Удалить все точки?')){ state.points=[]; state.edges=[]; edgePending=null; state.panX=0; state.panY=0; csvEl.value='x;y;z;id\n'; render(); } };
