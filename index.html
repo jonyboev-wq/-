@@ -389,10 +389,8 @@
             return `rgba(${r},${g},${b},0.28)`;
           };
           for (const c of conts){
-            for (const poly of c.coordinates){
-              const d = poly.map(ringToPath).join(' ');
-              path(contourFillLayer, d, {fill: color(c.value), stroke:'none'});
-            }
+            const d = c.coordinates.map(poly=>poly.map(ringToPath).join(' ')).join(' ');
+            path(contourFillLayer, d, {fill: color(c.value), stroke:'none'});
           }
         }
 
@@ -403,10 +401,8 @@
           };
           const stroke = isMajor(cont.value) ? '#334155' : '#64748b';
           const sw = isMajor(cont.value) ? 1.6 : 0.9;
-          cont.coordinates.forEach((poly)=>{
-            const d = poly.map(ringToPath).join(' ');
-            path(contourLineLayer, d, {fill:'none', stroke, strokeWidth:sw});
-          });
+          const d = cont.coordinates.map(poly=>poly.map(ringToPath).join(' ')).join(' ');
+          path(contourLineLayer, d, {fill:'none', stroke, strokeWidth:sw});
           const ring = cont.coordinates[0] ? cont.coordinates[0][0] : null;
           if (ring && ring.length>2){
             const mid = ring[Math.floor(ring.length/2)];
@@ -609,20 +605,16 @@
             return `rgba(${r},${g},${b},0.28)`;
           };
           conts.forEach(c=>{
-            c.coordinates.forEach(poly=>{
-              const d = poly.map(ringToD).join(' ');
-              svg.push(`<path d="${d}" fill="${color(c.value)}" stroke="none"/>`);
-            });
+            const d = c.coordinates.map(poly=>poly.map(ringToD).join(' ')).join(' ');
+            svg.push(`<path d="${d}" fill="${color(c.value)}" stroke="none"/>`);
           });
         }
 
         conts.forEach(c=>{
           const stroke = isMajor(c.value)?'#334155':'#64748b';
           const sw = isMajor(c.value)?0.4:0.25;
-          c.coordinates.forEach(poly=>{
-            const d = poly.map(ringToD).join(' ');
-            svg.push(`<path d="${d}" fill="none" stroke="${stroke}" stroke-width="${sw}"/>`);
-          });
+          const d = c.coordinates.map(poly=>poly.map(ringToD).join(' ')).join(' ');
+          svg.push(`<path d="${d}" fill="none" stroke="${stroke}" stroke-width="${sw}"/>`);
           const ring = c.coordinates[0] ? c.coordinates[0][0] : null;
           if (ring && ring.length>2){
             const mid = ring[Math.floor(ring.length/2)];
