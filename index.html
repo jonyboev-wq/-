@@ -175,6 +175,18 @@
       function niceMin(val, step) { return Math.floor(val / step) * step; }
       function niceMax(val, step) { return Math.ceil(val / step) * step; }
       function linScale(a,b,A,B){ const d=b-a, r=B-A; return (v)=>A + (v-a)*r/(d||1); }
+      function computeTransform(domain){
+        const width = state.width, height = state.height, pad = 60;
+        const w = width - 2*pad, h = height - 2*pad;
+        const domainW = domain.maxX - domain.minX, domainH = domain.maxY - domain.minY;
+        const scale = Math.min(w/domainW, h/domainH);
+        const plotW = domainW * scale, plotH = domainH * scale;
+        const offsetX = pad + (w - plotW)/2, offsetY = pad + (h - plotH)/2;
+        const X = x => offsetX + (x - domain.minX)*scale;
+        const Ybase = y => offsetY + (domain.maxY - y)*scale;
+        const Yinv = y => offsetY + (y - domain.minY)*scale;
+        return {X, Ybase, Yinv, scale, offsetX, offsetY, plotW, plotH};
+      }
       function formatNum(n){
         if(!Number.isFinite(n)) return '';
         const rounded = Math.round((n + Number.EPSILON) * 100) / 100;
@@ -285,8 +297,9 @@
         const pt = svgEl.createSVGPoint(); pt.x=e.clientX; pt.y=e.clientY;
         const inv = svgEl.getScreenCTM().inverse(); const sp = pt.matrixTransform(inv);
         const domain = getDomain();
-        const x = domain.minX + ((sp.x - pad) / (width - 2*pad)) * (domain.maxX - domain.minX);
-        const yScreen = domain.minY + ((sp.y - pad) / (height - 2*pad)) * (domain.maxY - domain.minY);
+        const tr = computeTransform(domain);
+        const x = domain.minX + (sp.x - tr.offsetX) / tr.scale;
+        const yScreen = domain.minY + (sp.y - tr.offsetY) / tr.scale;
         const y = state.invertY ? (domain.maxY - (yScreen - domain.minY)) : yScreen;
 
         if (state.edgeMode){
@@ -339,9 +352,8 @@
         gridLayer.innerHTML=''; contourFillLayer.innerHTML=''; contourLineLayer.innerHTML=''; connectionsLayer.innerHTML=''; pointsLayer.innerHTML=''; labelsLayer.innerHTML='';
         const pts = asPts();
         const domain = getDomain();
-        const X = linScale(domain.minX, domain.maxX, pad, width-pad);
-        const Ybase = linScale(domain.minY, domain.maxY, height-pad, pad);
-        const Yinv = linScale(domain.minY, domain.maxY, pad, height-pad);
+        const tr = computeTransform(domain);
+        const {X, Ybase, Yinv, offsetX, offsetY, plotW, plotH} = tr;
         const toScreen = (x,y)=>({X:X(x), Y:(state.invertY?Ybase(y):Yinv(y))});
 
         if (state.showGrid){
@@ -349,13 +361,13 @@
           const x0 = niceMin(domain.minX, gs), x1 = niceMax(domain.maxX, gs);
           const y0 = niceMin(domain.minY, gs), y1 = niceMax(domain.maxY, gs);
           for (let x=x0;x<=x1+1e-9;x+=gs){
-            const sx = X(x); line(gridLayer, sx, pad, sx, height-pad, '#f1f5f9', 1);
-            text(gridLayer, X(x), height-pad+16, formatNum(x), {size:10, anchor:'middle', fill:'#475569'});
+            const sx = X(x); line(gridLayer, sx, offsetY, sx, offsetY+plotH, '#f1f5f9', 1);
+            text(gridLayer, sx, offsetY+plotH+16, formatNum(x), {size:10, anchor:'middle', fill:'#475569'});
           }
           for (let y=y0;y<=y1+1e-9;y+=gs){
             const sy = state.invertY?Ybase(y):Yinv(y);
-            line(gridLayer, pad, sy, width-pad, sy, '#f1f5f9', 1);
-            text(gridLayer, pad-6, sy+3, formatNum(y), {size:10, anchor:'end', fill:'#475569'});
+            line(gridLayer, offsetX, sy, offsetX+plotW, sy, '#f1f5f9', 1);
+            text(gridLayer, offsetX-6, sy+3, formatNum(y), {size:10, anchor:'end', fill:'#475569'});
           }
         }
 
@@ -453,11 +465,9 @@
           let d='';
           for(let i=0;i<ring.length;i++){
             const {x,y} = gridToDomain(ring[i][0], ring[i][1], raster, domain);
-            const X = linScale(domain.minX, domain.maxX, pad, width-pad)(x);
-            const Y = (state.invertY
-              ? linScale(domain.minY, domain.maxY, height-pad, pad)(y)
-              : linScale(domain.minY, domain.maxY, pad, height-pad)(y));
-            d += (i===0?`M ${X} ${Y}`:` L ${X} ${Y}`);
+            const sx = X(x);
+            const sy = state.invertY ? Ybase(y) : Yinv(y);
+            d += (i===0?`M ${sx} ${sy}`:` L ${sx} ${sy}`);
           }
           return d + ' Z';
         }
@@ -503,9 +513,8 @@
       function nearestPoint(sx, sy){
         const pts = asPts();
         const domain = getDomain();
-        const X = linScale(domain.minX, domain.maxX, pad, width-pad);
-        const Ybase = linScale(domain.minY, domain.maxY, height-pad, pad);
-        const Yinv = linScale(domain.minY, domain.maxY, pad, height-pad);
+        const tr = computeTransform(domain);
+        const {X, Ybase, Yinv} = tr;
         let best=null, bestDist=Infinity;
         for (const p of pts){
           const px = X(p.x);
