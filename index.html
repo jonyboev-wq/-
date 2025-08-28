@@ -130,31 +130,47 @@
       };
       let edgePending = null;
       const EXAMPLE_CSV = `x;y;z;id
-0;0;120;P1
-50;0;121;P2
-100;0;122;P3
-150;0;122.5;P4
-200;0;123;P5
-0;50;119;P6
-50;50;120.5;P7
-100;50;121;P8
-150;50;122;P9
-200;50;123;P10
-0;100;118;P11
-50;100;119.5;P12
-100;100;120.5;P13
-150;100;121.5;P14
-200;100;122.5;P15
-0;150;117.5;P16
-50;150;118.5;P17
-100;150;119.5;P18
-150;150;120.5;P19
-200;150;121.5;P20
-0;200;117;P21
-50;200;117.5;P22
-100;200;118.5;P23
-150;200;119.5;P24
-200;200;120;P25`;
+251.76;996.24;221.15;1
+273.79;1001.94;221.041;2
+279.34;1010.7;221.052;3
+267.71;1024.4;220.982;4
+245.42;1039.56;220.828;5
+232.09;1038.59;220.77;6
+226.3;1028.7;221.016;7
+229.39;1017.08;221.132;8
+248.33;1037.16;220.84;11
+246.2;1036.95;220.815;12
+246.3;1034.79;220.83;13
+261.16;1021.94;220.939;14
+263.27;1022.11;220.956;15
+263.11;1024.25;220.943;16
+271.21;1017.21;221.103;17
+269.07;1017.03;220.984;18
+269.18;1014.92;220.982;19
+276.03;1008.9;221.243;20
+278.14;1009.01;221.242;21
+278.07;1011.18;221.217;22
+254.48;1000.08;221.353;23
+254.24;1001.94;221.325;24
+231.51;1019.74;220.982;25
+233.598;1020.03;221.512;26
+239.16;1028.88;220.856;27
+241.27;1029.88;220.825;28
+241.15;1029.22;220.817;29
+243.48;1029.21;220.81;30
+262.95;1011.24;220.962;31
+262.36;1009.33;221.247;32
+262.14;1011.67;220.942;33
+261.66;1012.79;220.936;34
+238.62;1018.44;221.388;35
+250.59;1017.68;221.244;36
+252.15;1006.66;221.263;37`;
+
+      const EXAMPLE_EDGES = [
+        ['1','2'], ['2','3'], ['3','4'], ['4','5'], ['5','6'], ['6','7'], ['7','8'], ['8','1'],
+        ['17','18'], ['18','19'], ['19','20'], ['20','21'], ['21','22'], ['22','17'],
+        ['11','12'], ['12','13'], ['13','14'], ['14','15'], ['15','16'], ['16','11'],
+      ];
 
       function niceMin(val, step) { return Math.floor(val / step) * step; }
       function niceMax(val, step) { return Math.ceil(val / step) * step; }
@@ -209,7 +225,7 @@
         state.points = parsePoints(csvEl.value);
         render();
       });
-      $('btnExample').onclick = ()=>{ csvEl.value = EXAMPLE_CSV; loadFromCsv(); };
+      $('btnExample').onclick = ()=>{ csvEl.value = EXAMPLE_CSV; loadFromCsv(); loadExampleEdges(); };
       $('fileCsv').onchange = (e)=>{ const files = e.target && e.target.files; const f = files && files[0]; if(!f) return; const r=new FileReader(); r.onload=(ev)=>{ const result = ev.target && ev.target.result; csvEl.value=String(result || ''); loadFromCsv(); }; r.readAsText(f); };
       $('btnClear').onclick = ()=>{ if(confirm('Удалить все точки?')){ state.points=[]; state.edges=[]; edgePending=null; state.panX=0; state.panY=0; csvEl.value='x;y;z;id\n'; render(); } };
       $('swapXY').onchange = (e)=>{ state.swapXY=e.target.checked; render(); };
@@ -315,8 +331,9 @@
       };
       $('btnSvgA2').onclick = exportA2;
 
-      csvEl.value = EXAMPLE_CSV; loadFromCsv();
-      function loadFromCsv(){ state.points = parsePoints(csvEl.value); state.panX=0; state.panY=0; render(); }
+      csvEl.value = EXAMPLE_CSV; loadFromCsv(); loadExampleEdges();
+      function loadFromCsv(){ state.points = parsePoints(csvEl.value); state.panX=0; state.panY=0; state.edges=[]; edgePending=null; render(); }
+      function loadExampleEdges(){ state.edges = EXAMPLE_EDGES.map(([a,b])=>({aId:a,bId:b})); edgePending=null; render(); }
 
       function render(){
         gridLayer.innerHTML=''; contourFillLayer.innerHTML=''; contourLineLayer.innerHTML=''; connectionsLayer.innerHTML=''; pointsLayer.innerHTML=''; labelsLayer.innerHTML='';
